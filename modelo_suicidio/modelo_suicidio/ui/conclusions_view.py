@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
                              QLabel, QTextEdit, QGroupBox, QFormLayout, QMessageBox, QFileDialog)
-from core.statistics import calculate_statistics, generate_conclusion_text
+from core.statistics import calculate_statistics, generar_texto_conclusion_detallada
 
 class ConclusionsView(QWidget):
     def __init__(self, main_window):
@@ -71,8 +71,14 @@ class ConclusionsView(QWidget):
             self.lbl_mae.setText(f"{stats['MAE']:.4f}")
             self.lbl_mape.setText(f"{stats['MAPE']:.2f}%")
             
-            text = generate_conclusion_text(stats, self.main_window.params)
-            self.text_conclusions.setPlainText(text)
+            # Recuperar el DataFrame de resultados de stats (agregado en calculate_statistics)
+            res_df = stats.get('res_df', None)
+            
+            if res_df is not None:
+                text = generar_texto_conclusion_detallada(stats, self.main_window.params, res_df, anio_ini, anio_fin)
+                self.text_conclusions.setPlainText(text)
+            else:
+                self.text_conclusions.setPlainText("Error: No se pudieron generar los datos simulados para las conclusiones.")
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Error al calcular estadísticas: {e}")

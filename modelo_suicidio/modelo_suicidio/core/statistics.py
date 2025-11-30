@@ -6,6 +6,7 @@ from .analysis import prueba_escritorio
 def calculate_statistics(df: pd.DataFrame, params: ModeloParametros, anio_ini: int, anio_fin: int) -> dict:
     """
     Calcula estadísticos de ajuste (R2, MSE, RMSE, MAE, MAPE) comparando T_model vs T_obs.
+    Retorna un diccionario con las métricas y el DataFrame de resultados simulados.
     """
     # Ejecutar simulación para obtener datos comparados
     res_df = prueba_escritorio(df, params, anio_ini, anio_fin)
@@ -16,7 +17,7 @@ def calculate_statistics(df: pd.DataFrame, params: ModeloParametros, anio_ini: i
     if valid.empty:
         return {
             'R2': 0.0, 'MSE': 0.0, 'RMSE': 0.0, 'MAE': 0.0, 'MAPE': 0.0,
-            'n_obs': 0
+            'n_obs': 0, 'res_df': res_df
         }
     
     y_true = valid['T_obs'].values
@@ -50,65 +51,136 @@ def calculate_statistics(df: pd.DataFrame, params: ModeloParametros, anio_ini: i
         'RMSE': rmse,
         'MAE': mae,
         'MAPE': mape,
-        'n_obs': len(y_true)
+        'n_obs': len(y_true),
+        'res_df': res_df
     }
 
-def generate_conclusion_text(stats: dict, params: ModeloParametros) -> str:
+def generar_texto_conclusion_detallada(
+    stats: dict,
+    params: ModeloParametros,
+    df_resultados: pd.DataFrame,
+    anio_ini: int,
+    anio_fin: int
+) -> str:
     """
-    Genera un texto explicativo basado en los estadísticos y parámetros.
+    Construye el texto de conclusiones siguiendo la estructura descrita:
+    resumen general, comparación datos vs modelo, interpretación de métricas,
+    interpretación de parámetros y conclusión general.
+    Usa lenguaje claro en español y condicionales basados en R² y MAPE
+    para clasificar la calidad del ajuste.
     """
     r2 = stats.get('R2', 0)
     mape = stats.get('MAPE', 0)
+    rmse = stats.get('RMSE', 0)
+    mae = stats.get('MAE', 0)
+    
+    # Filtrar datos válidos para análisis detallado
+    valid = df_resultados.dropna(subset=['T_obs', 'T_model'])
+    if valid.empty:
+        return "No hay suficientes datos observados para generar conclusiones detalladas."
+        
+    t_obs_mean = valid['T_obs'].mean()
+    t_model_mean = valid['T_model'].mean()
+    diff_mean = t_model_mean - t_obs_mean
+    
+    # Calcular errores por año
+    valid['error'] = valid['T_model'] - valid['T_obs']
+    valid['error_rel'] = (valid['error'] / valid['T_obs']).abs() * 100
+    
+    idx_max_error = valid['error_rel'].idxmax()
+    anio_max_error = valid.loc[idx_max_error, 'anio']
+    max_error_rel = valid.loc[idx_max_error, 'error_rel']
+    error_max_abs = valid.loc[idx_max_error, 'error']
     
     txt = "=== INFORME DE CONCLUSIONES DEL MODELO ===\n\n"
     
-    # 1. Evaluación de Ajuste
-    txt += "1. EVALUACIÓN DE AJUSTE\n"
-    txt += f"El modelo tiene un R² de {r2:.4f}, "
-    
-    if r2 > 0.9:
-        txt += "lo que indica un ajuste excelente a los datos observados.\n"
-    elif r2 > 0.7:
-        txt += "lo que indica un ajuste bueno a los datos observados.\n"
-    elif r2 > 0.5:
-        txt += "lo que indica un ajuste moderado a los datos observados.\n"
+    # 1. RESUMEN GENERAL
+    txt += "1. RESUMEN GENERAL\n"
+    calidad = ""
+    if r2 >= 0.9 and mape < 10:
+        calidad = "Muy bueno"
+        desc = "El modelo logra seguir con gran precisión la tendencia de los casos en tratamiento."
+    elif r2 >= 0.7 and mape < 20:
+        calidad = "Bueno/Aceptable"
+        desc = "El modelo logra seguir bastante bien la tendencia de los casos en tratamiento, aunque presenta errores moderados en algunos años."
     else:
-        txt += "lo que indica un ajuste pobre a los datos observados.\n"
+        calidad = "Débil"
+        desc = "El modelo tiene dificultades para capturar la variabilidad de los datos observados, presentando desviaciones importantes."
         
-    txt += f"El error porcentual medio (MAPE) es del {mape:.2f}%, "
-    if mape < 10:
-        txt += "lo que sugiere que las predicciones son muy precisas.\n\n"
-    elif mape < 20:
-        txt += "lo que sugiere algunas desviaciones en las predicciones.\n\n"
-    else:
-        txt += "lo que indica errores significativos en las predicciones.\n\n"
+    txt += f"El ajuste del modelo se considera: {calidad}.\n"
+    txt += f"{desc}\n\n"
     
-    # 2. Parámetros del Modelo
-    txt += "2. PARÁMETROS DEL MODELO\n"
-    txt += f"Los parámetros calibrados sugieren una tasa de iniciación (Beta) de {params.beta:.6f}, "
-    if params.beta > 0.1: # Umbral arbitrario para "alto" vs "bajo" en este contexto
-        txt += "lo que implica una propagación rápida del suicidio en la población vulnerable debido al contagio social.\n"
+    # 2. COMPARACIÓN DATOS OBSERVADOS VS SIMULADOS
+    txt += "2. COMPARACIÓN ENTRE DATOS OBSERVADOS Y SIMULADOS\n"
+    txt += f"En el periodo analizado ({anio_ini}-{anio_fin}):\n"
+    txt += f"- Promedio de casos observados: {t_obs_mean:.1f}\n"
+    txt += f"- Promedio de casos simulados: {t_model_mean:.1f}\n"
+    
+    if diff_mean > 0:
+        txt += f"En promedio, el modelo sobreestima los casos en tratamiento en alrededor de {abs(diff_mean):.0f} personas por año.\n"
     else:
-        txt += "lo que implica una propagación moderada o baja del suicidio en la población vulnerable.\n"
+        txt += f"En promedio, el modelo subestima los casos en tratamiento en alrededor de {abs(diff_mean):.0f} personas por año.\n"
         
-    txt += f"La tasa de transmisión externa (Gamma) es de {params.gamma:.6f}, lo que indica factores sociales importantes independientes del contagio.\n"
+    txt += f"El mayor error relativo se observa en {int(anio_max_error)}, donde el modelo "
+    if error_max_abs > 0:
+        txt += f"sobreestima en aproximadamente {error_max_abs:.0f} casos ({max_error_rel:.1f}%).\n\n"
+    else:
+        txt += f"subestima en aproximadamente {abs(error_max_abs):.0f} casos ({max_error_rel:.1f}%).\n\n"
+
+    # 3. INTERPRETACIÓN DE LAS MÉTRICAS
+    txt += "3. INTERPRETACIÓN DE LAS MÉTRICAS\n"
+    txt += f"- R² ({r2:.4f}): Indica que el modelo explica el {r2*100:.1f}% de la variabilidad de los datos observados.\n"
+    txt += f"- RMSE ({rmse:.1f}) / MAE ({mae:.1f}): En promedio, las predicciones del modelo se alejan {mae:.1f} casos de los valores reales.\n"
+    txt += f"- MAPE ({mape:.2f}%): Significa que, en promedio, las predicciones del modelo se desvían un {mape:.2f}% de los datos observados.\n\n"
     
-    txt += f"La tasa de recuperación (Rho) es de {params.rho:.6f}. "
+    # 4. PARÁMETROS DEL MODELO
+    txt += "4. PARÁMETROS DEL MODELO\n"
+    txt += f"- Beta (β = {params.beta:.6f}): Intensidad del 'contagio' o influencia social.\n"
+    if params.beta > 0.1:
+        txt += "  Un valor alto sugiere que la influencia social juega un papel crucial en la propagación.\n"
+    else:
+        txt += "  Un valor bajo sugiere que la influencia social tiene un efecto moderado o limitado.\n"
+        
+    txt += f"- Gamma (γ = {params.gamma:.6f}): Fuerza de factores externos que llevan a tratamiento.\n"
+    txt += "  Representa la entrada a tratamiento por causas ajenas al contagio social (factores económicos, personales, etc.).\n"
+    
+    txt += f"- Rho (ρ = {params.rho:.6f}): Velocidad de salida de tratamiento (recuperación).\n"
     if params.rho > 0:
         tiempo_recup = 1/params.rho
-        txt += f"Esto sugiere que el tiempo promedio en el estado de tratamiento es de aproximadamente {tiempo_recup:.2f} años.\n"
-        if params.rho < 0.2: # < 0.2 significa > 5 años
-             txt += "Si este valor es muy bajo, sugiere que el tiempo de tratamiento en el modelo es muy largo.\n"
+        txt += f"  Este valor sugiere un tiempo promedio de permanencia en tratamiento de aproximadamente {tiempo_recup:.2f} años.\n"
     else:
-        txt += "Esto sugiere que no hay recuperación significativa en el modelo.\n"
-    txt += "\n"
-
-    # 3. Conclusión General
-    txt += "3. CONCLUSIÓN GENERAL\n"
-    if r2 > 0.9 and mape < 10:
-        txt += "El modelo sigue razonablemente los datos observados y captura bien la dinámica. Puede ser útil para planificación de políticas públicas."
+        txt += "  El valor es 0, lo que implica que no hay salida de tratamiento en el modelo.\n"
+        
+    txt += f"- Theta (θ = {params.theta:.6f}): Entrada desde población vulnerable a susceptibles.\n\n"
+    
+    # 5. CONCLUSIÓN GENERAL
+    txt += "5. CONCLUSIÓN GENERAL\n"
+    if calidad == "Muy bueno":
+        txt += "El modelo es muy útil para describir la dinámica de T(t) en Oaxaca y puede usarse con confianza para proyecciones a corto plazo."
+    elif calidad == "Bueno/Aceptable":
+        txt += "El modelo es útil para entender la tendencia general, pero se debe tener precaución con las predicciones exactas en años específicos."
+        txt += " Se recomienda revisar si hay eventos externos en los años de mayor error que no están siendo capturados."
     else:
-        txt += "Aunque el modelo captura la tendencia general, existen desviaciones significativas (ajuste no ideal). "
-        txt += "Se recomienda revisar los datos de entrada, las suposiciones sobre la dinámica del tratamiento y la recuperación, o recalibrar los parámetros para mejorar la precisión del modelo."
+        txt += "El modelo actual no captura adecuadamente la dinámica observada. Se recomienda:\n"
+        txt += " - Revisar la calidad de los datos observados.\n"
+        txt += " - Intentar calibrar con un rango de años diferente.\n"
+        txt += " - Considerar si los supuestos del modelo (ej. parámetros constantes) son válidos para todo el periodo."
         
     return txt
+
+# Mantener compatibilidad hacia atrás si es necesario, o eliminar si ya no se usa
+def generate_conclusion_text(stats: dict, params: ModeloParametros) -> str:
+    """
+    DEPRECATED: Use generar_texto_conclusion_detallada instead.
+    Wrapper para mantener compatibilidad si algo más lo llama.
+    """
+    # Necesitamos un DF dummy o el real si estuviera en stats.
+    # Si stats tiene 'res_df', lo usamos.
+    if 'res_df' in stats:
+        res_df = stats['res_df']
+        # Inferir anios
+        anio_ini = int(res_df['anio'].min())
+        anio_fin = int(res_df['anio'].max())
+        return generar_texto_conclusion_detallada(stats, params, res_df, anio_ini, anio_fin)
+    else:
+        return "Error: No se puede generar el texto detallado sin el DataFrame de resultados."
