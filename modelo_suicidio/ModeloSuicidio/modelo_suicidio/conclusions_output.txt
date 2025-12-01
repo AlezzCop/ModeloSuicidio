@@ -1,0 +1,29 @@
+=== INFORME DE CONCLUSIONES DEL MODELO ===
+
+1. RESUMEN GENERAL
+El ajuste del modelo se considera: Muy bueno.
+El modelo logra seguir con gran precisión la tendencia de los casos en tratamiento.
+
+2. COMPARACIÓN ENTRE DATOS OBSERVADOS Y SIMULADOS
+En el periodo analizado (2010-2019):
+- Promedio de casos observados: 145.0
+- Promedio de casos simulados: 152.2
+En promedio, el modelo sobreestima los casos en tratamiento en alrededor de 7 personas por año.
+El mayor error relativo se observa en 2010, donde el modelo sobreestima en aproximadamente 5 casos (5.0%).
+
+3. INTERPRETACIÓN DE LAS MÉTRICAS
+- R² (0.9500): Indica que el modelo explica el 95.0% de la variabilidad de los datos observados.
+- RMSE (10.0) / MAE (8.0): En promedio, las predicciones del modelo se alejan 8.0 casos de los valores reales.
+- MAPE (5.00%): Significa que, en promedio, las predicciones del modelo se desvían un 5.00% de los datos observados.
+
+4. PARÁMETROS DEL MODELO
+- Beta (β = 0.200000): Intensidad del 'contagio' o influencia social.
+  Un valor alto sugiere que la influencia social juega un papel crucial en la propagación.
+- Gamma (γ = 0.010000): Fuerza de factores externos que llevan a tratamiento.
+  Representa la entrada a tratamiento por causas ajenas al contagio social (factores económicos, personales, etc.).
+- Rho (ρ = 0.150000): Velocidad de salida de tratamiento (recuperación).
+  Este valor sugiere un tiempo promedio de permanencia en tratamiento de aproximadamente 6.67 años.
+- Theta (θ = 0.050000): Entrada desde población vulnerable a susceptibles.
+
+5. CONCLUSIÓN GENERAL
+El modelo es muy útil para describir la dinámica de T(t) en Oaxaca y puede usarse con confianza para proyecciones a corto plazo.
