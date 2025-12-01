@@ -153,8 +153,12 @@ def generar_texto_conclusion_detallada(
         
     txt += f"- Theta (θ = {params.theta:.6f}): Entrada desde población vulnerable a susceptibles.\n\n"
     
-    # 5. CONCLUSIÓN GENERAL
-    txt += "5. CONCLUSIÓN GENERAL\n"
+    # 5. COMENTARIO SOBRE LA TABLA COMPARATIVA
+    txt += "5. COMENTARIO SOBRE LA TABLA COMPARATIVA\n"
+    txt += generar_conclusion_tabla_comparativa(df_resultados) + "\n\n"
+
+    # 6. CONCLUSIÓN GENERAL
+    txt += "6. CONCLUSIÓN GENERAL\n"
     if calidad == "Muy bueno":
         txt += "El modelo es muy útil para describir la dinámica de T(t) en Oaxaca y puede usarse con confianza para proyecciones a corto plazo."
     elif calidad == "Bueno/Aceptable":
@@ -166,6 +170,57 @@ def generar_texto_conclusion_detallada(
         txt += " - Intentar calibrar con un rango de años diferente.\n"
         txt += " - Considerar si los supuestos del modelo (ej. parámetros constantes) son válidos para todo el periodo."
         
+    return txt
+
+def generar_conclusion_tabla_comparativa(df_resultados: pd.DataFrame) -> str:
+    """
+    A partir de la tabla comparativa (anio, T_obs, T_model, error_abs, error_rel),
+    genera un breve texto en español que:
+      - Mencione si en promedio el modelo tiende a sobreestimar o subestimar T_obs.
+      - Indique el año con mayor error relativo y el valor aproximado del error.
+      - Comente si los errores tienden a ser mayores al inicio, en la mitad o al final del periodo.
+    """
+    valid = df_resultados.dropna(subset=['T_obs', 'T_model']).copy()
+    if valid.empty:
+        return "No hay datos suficientes para analizar la tabla comparativa."
+
+    # Asegurar columnas de error
+    if 'error' not in valid.columns:
+        valid['error'] = valid['T_model'] - valid['T_obs']
+    if 'error_rel' not in valid.columns:
+        valid['error_rel'] = (valid['error'] / valid['T_obs']).abs() * 100
+
+    # 1. Sobre/Subestimación promedio
+    mean_error = valid['error'].mean()
+    if mean_error > 0:
+        tendencia = "tiende a sobreestimar ligeramente"
+    else:
+        tendencia = "tiende a subestimar ligeramente"
+    
+    txt = f"Al observar la tabla comparativa, se nota que el modelo {tendencia} los valores observados (error medio de {mean_error:.1f} casos). "
+
+    # 2. Año con mayor error
+    idx_max = valid['error_rel'].idxmax()
+    anio_max = valid.loc[idx_max, 'anio']
+    err_max = valid.loc[idx_max, 'error_rel']
+    txt += f"La mayor discrepancia relativa ocurre en el año {int(anio_max)} con un error del {err_max:.1f}%. "
+
+    # 3. Distribución temporal del error (Inicio vs Final)
+    # Dividir en dos mitades
+    mid_idx = len(valid) // 2
+    first_half = valid.iloc[:mid_idx]
+    second_half = valid.iloc[mid_idx:]
+
+    mean_err_rel_1 = first_half['error_rel'].mean() if not first_half.empty else 0
+    mean_err_rel_2 = second_half['error_rel'].mean() if not second_half.empty else 0
+
+    if abs(mean_err_rel_1 - mean_err_rel_2) < 2.0:
+        txt += "Los errores se mantienen relativamente constantes a lo largo del periodo."
+    elif mean_err_rel_1 > mean_err_rel_2:
+        txt += "Los errores tienden a ser mayores al inicio del periodo, mejorando el ajuste en los años más recientes."
+    else:
+        txt += "El ajuste es mejor al inicio, pero los errores aumentan en los años finales del periodo."
+
     return txt
 
 # Mantener compatibilidad hacia atrás si es necesario, o eliminar si ya no se usa

@@ -111,6 +111,17 @@ class CalibrationView(QWidget):
         self.main_window.params = params
         self.main_window.ui_parameters.update_display_params()
         
+        # Actualizar conclusiones con los nuevos parámetros
+        try:
+            anio_ini = self.spin_start.value()
+            anio_fin = self.spin_end.value()
+            res_df = self.main_window.run_simulation(anio_ini, anio_fin)
+            self.main_window.ui_conclusions.actualizar_desde_resultados(
+                res_df, params, anio_ini, anio_fin
+            )
+        except Exception as e:
+            print(f"Error actualizando conclusiones tras calibración: {e}")
+
         QMessageBox.information(self, "Éxito", "Calibración completada. Parámetros actualizados.")
 
     def on_error(self, msg):

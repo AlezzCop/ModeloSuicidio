@@ -48,12 +48,20 @@ class SimulationView(QWidget):
             # Actualizar parámetros manuales antes de simular
             self.main_window.update_nonlinear_params_from_ui()
             
-            res_df = self.main_window.run_simulation(
-                self.spin_start.value(),
-                self.spin_end.value()
-            )
+            anio_ini = self.spin_start.value()
+            anio_fin = self.spin_end.value()
+            
+            res_df = self.main_window.run_simulation(anio_ini, anio_fin)
             
             self.plot_results(res_df)
+            
+            # Actualizar pestaña de conclusiones
+            self.main_window.ui_conclusions.actualizar_desde_resultados(
+                res_df, 
+                self.main_window.params, 
+                anio_ini, 
+                anio_fin
+            )
             
         except Exception as e:
             QMessageBox.critical(self, "Error", str(e))
